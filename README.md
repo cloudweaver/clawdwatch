@@ -151,7 +151,7 @@ Clawdwatch runs on the [Clawdbot](https://github.com/clawdbot/clawdbot) agent fr
 ## Roadmap
 
 - [x] Project scaffolding
-- [ ] ADS-B Exchange integration
+- [x] OpenSky Network flight tracking (LIVE)
 - [ ] MarineTraffic integration
 - [ ] Twitter/Telegram scrapers
 - [ ] AI summarization pipeline
