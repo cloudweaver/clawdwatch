@@ -209,7 +209,7 @@
         }
         
         .panel-content {
-            max-height: 380px;
+            max-height: 450px;
             overflow-y: auto;
         }
         
@@ -943,9 +943,17 @@
         // ========== NEWS ==========
         async function updateNews() {
             const feeds = [
-                { name: 'AL JAZEERA', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
-                { name: 'BBC', url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml' },
-                { name: 'REUTERS', url: 'https://www.reutersagency.com/feed/?taxonomy=best-regions&post_type=best' }
+                // Major Wire Services
+                { name: 'AP NEWS', url: 'https://rsshub.app/apnews/topics/apf-middleeast', color: '#ff3b30' },
+                { name: 'REUTERS', url: 'https://www.reutersagency.com/feed/?taxonomy=best-regions&post_type=best', color: '#ff8c00' },
+                // Middle East Focus
+                { name: 'AL JAZEERA', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#d4a847' },
+                { name: 'BBC MIDEAST', url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', color: '#bb1919' },
+                { name: 'TIMES OF ISRAEL', url: 'https://www.timesofisrael.com/feed/', color: '#1e5799' },
+                { name: 'IRAN INTL', url: 'https://www.iranintl.com/en/feed', color: '#00a651' },
+                // Breaking/Conflict
+                { name: 'CNN WORLD', url: 'http://rss.cnn.com/rss/edition_world.rss', color: '#cc0000' },
+                { name: 'GUARDIAN', url: 'https://www.theguardian.com/world/middleeast/rss', color: '#052962' },
             ];
             
             let allNews = [];
@@ -957,9 +965,10 @@
                     });
                     const data = await res.json();
                     if (data.items) {
-                        data.items.slice(0, 3).forEach(item => {
+                        data.items.slice(0, 4).forEach(item => {
                             allNews.push({
                                 source: feed.name,
+                                color: feed.color || '#a371f7',
                                 title: item.title,
                                 link: item.link,
                                 date: new Date(item.pubDate)
@@ -972,12 +981,12 @@
             }
             
             allNews.sort((a, b) => b.date - a.date);
-            allNews = allNews.slice(0, 8);
+            allNews = allNews.slice(0, 15);
             
             if (allNews.length) {
                 document.getElementById('newsList').innerHTML = allNews.map(n => `
                     <div class="news-item">
-                        <div class="news-source">${n.source}</div>
+                        <div class="news-source" style="color:${n.color}">${n.source}</div>
                         <div class="news-title"><a href="${n.link}" target="_blank">${n.title}</a></div>
                         <div class="news-time">${getTimeAgo(n.date)}</div>
                     </div>
