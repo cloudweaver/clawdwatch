@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWDWATCH — Real-Time War Intelligence</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #0f1419;
+            --bg-tertiary: #151b23;
+            --border: #1e2733;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-red: #f85149;
+            --accent-orange: #db6d28;
+            --accent-yellow: #d29922;
+            --accent-green: #3fb950;
+            --accent-blue: #58a6ff;
+            --accent-purple: #a371f7;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        .header {
+            background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        
+        .logo {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.8em;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-red) 0%, var(--accent-orange) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .tagline { color: var(--text-secondary); font-size: 0.9em; }
+        
+        .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        
+        .status-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.85em; color: var(--text-secondary); }
+        
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .region-badge {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            padding: 6px 14px; border-radius: 20px; font-size: 0.8em; font-weight: 600; color: var(--accent-blue);
+        }
+        
+        .stats-bar {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+            background: var(--border); border-bottom: 1px solid var(--border);
+        }
+        
+        @media (max-width: 600px) { .stats-bar { grid-template-columns: repeat(2, 1fr); } }
+        
+        .stat-card { background: var(--bg-secondary); padding: 16px 20px; text-align: center; }
+        
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.8em; font-weight: 700; color: var(--accent-blue); }
+        .stat-value.critical { color: var(--accent-red); }
+        .stat-value.warning { color: var(--accent-yellow); }
+        
+        .stat-label { font-size: 0.75em; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+        
+        .dashboard {
+            display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px;
+            padding: 16px; max-width: 1920px; margin: 0 auto;
+        }
+        
+        @media (max-width: 1200px) { .dashboard { grid-template-columns: repeat(6, 1fr); } }
+        @media (max-width: 768px) { .dashboard { grid-template-columns: 1fr; } }
+        
+        .panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        
+        .panel.span-8 { grid-column: span 8; }
+        .panel.span-6 { grid-column: span 6; }
+        .panel.span-4 { grid-column: span 4; }
+        .panel.span-12 { grid-column: span 12; }
+        
+        @media (max-width: 1200px) { .panel.span-8, .panel.span-6, .panel.span-4, .panel.span-12 { grid-column: span 6; } }
+        @media (max-width: 768px) { .panel.span-8, .panel.span-6, .panel.span-4, .panel.span-12 { grid-column: span 1; } }
+        
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-tertiary);
+        }
+        
+        .panel-title { font-size: 0.85em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        
+        .live-badge {
+            background: var(--accent-red); color: white; padding: 2px 8px; border-radius: 4px;
+            font-size: 0.7em; font-weight: 700; animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .panel-content { max-height: 500px; overflow-y: auto; }
+        .panel-content::-webkit-scrollbar { width: 6px; }
+        .panel-content::-webkit-scrollbar-track { background: var(--bg-primary); }
+        .panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        
+        .map-container { height: 450px; background: var(--bg-primary); }
+        
+        .news-item { padding: 12px 16px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .news-item:hover { background: var(--bg-tertiary); }
+        .news-source { font-size: 0.7em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .news-title { font-size: 0.9em; margin-top: 4px; line-height: 1.4; }
+        .news-title a { color: var(--text-primary); text-decoration: none; }
+        .news-title a:hover { color: var(--accent-blue); }
+        .news-time { font-size: 0.75em; color: var(--text-secondary); margin-top: 6px; }
+        
+        .flight-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+        .flight-item.military { background: rgba(248, 81, 73, 0.1); border-left: 3px solid var(--accent-red); }
+        .flight-callsign { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent-blue); }
+        .flight-item.military .flight-callsign { color: var(--accent-red); }
+        .flight-info { font-size: 0.85em; color: var(--text-secondary); }
+        
+        .resource-link {
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+            border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text-primary); transition: background 0.2s;
+        }
+        .resource-link:hover { background: var(--bg-tertiary); }
+        .resource-icon { font-size: 1.2em; }
+        .resource-name { font-weight: 500; color: var(--accent-blue); }
+        .resource-desc { font-size: 0.8em; color: var(--text-secondary); }
+        
+        .loading { padding: 40px; text-align: center; color: var(--text-secondary); }
+        .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .empty-state { padding: 30px; text-align: center; color: var(--text-secondary); font-size: 0.9em; }
+        
+        .footer { text-align: center; padding: 20px; color: var(--text-secondary); font-size: 0.8em; border-top: 1px solid var(--border); }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+        
+        .leaflet-container { background: var(--bg-primary); }
+        .leaflet-popup-content-wrapper { background: var(--bg-secondary); color: var(--text-primary); border-radius: 6px; border: 1px solid var(--border); }
+        .leaflet-popup-tip { background: var(--bg-secondary); }
+        
+        .custom-marker { display: flex; align-items: center; justify-content: center; }
+        
+        /* Links only - no embeds needed */
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">🦀 CLAWDWATCH</div>
+            <div class="tagline">Real-Time War Intelligence</div>
+        </div>
+        <div class="header-right">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Live</span>
+            </div>
+            <div class="region-badge">📍 MIDDLE EAST</div>
+            <div class="status-indicator" id="updateTime">Updated: --:--</div>
+        </div>
+    </header>
+    
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value" id="flightCount">--</div>
+            <div class="stat-label">✈️ Aircraft</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value critical" id="militaryCount">--</div>
+            <div class="stat-label">🎖️ Military</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="newsCount">--</div>
+            <div class="stat-label">📰 News</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="statementsCount">--</div>
+            <div class="stat-label">📢 Statements</div>
+        </div>
+    </div>
+    
+    <main class="dashboard">
+        <!-- Live Flight Radar - REAL DATA -->
+        <div class="panel span-8">
+            <div class="panel-header">
+                <div class="panel-title">✈️ Live Flight Radar <span class="live-badge">REAL-TIME</span></div>
+                <span id="mapStatus" style="color:var(--text-secondary);font-size:0.8em">Connecting to OpenSky...</span>
+            </div>
+            <div class="map-container" id="flightMap"></div>
+        </div>
+        
+        <!-- Military Aircraft Detected - REAL DATA -->
+        <div class="panel span-4">
+            <div class="panel-header">
+                <div class="panel-title">🎖️ Military Aircraft <span class="live-badge">REAL</span></div>
+            </div>
+            <div class="panel-content" id="militaryList">
+                <div class="loading"><div class="spinner"></div>Scanning ADS-B...</div>
+            </div>
+        </div>
+        
+        <!-- Breaking News - REAL RSS FEEDS -->
+        <div class="panel span-6">
+            <div class="panel-header">
+                <div class="panel-title">📰 Breaking News <span class="live-badge">LIVE RSS</span></div>
+            </div>
+            <div class="panel-content" id="newsList">
+                <div class="loading"><div class="spinner"></div>Fetching RSS feeds...</div>
+            </div>
+        </div>
+        
+        <!-- Official Statements - REAL RSS FEEDS -->
+        <div class="panel span-6">
+            <div class="panel-header">
+                <div class="panel-title">📢 Official Statements <span class="live-badge">LIVE RSS</span></div>
+            </div>
+            <div class="panel-content" id="statementList">
+                <div class="loading"><div class="spinner"></div>Fetching official sources...</div>
+            </div>
+        </div>
+        
+        <!-- Quick Launch - External Tools -->
+        <div class="panel span-12">
+            <div class="panel-header">
+                <div class="panel-title">🚀 Live Intelligence Tools</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding:16px;">
+                <a href="https://globe.adsbexchange.com/?lat=30&lon=46&zoom=5" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">📡</span>
+                    <span style="color:var(--accent-blue);font-weight:600">ADS-B Exchange</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Unfiltered military flights</span>
+                </a>
+                <a href="https://www.flightradar24.com/32.5,46,5" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">✈️</span>
+                    <span style="color:var(--accent-blue);font-weight:600">FlightRadar24</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Live aircraft tracking</span>
+                </a>
+                <a href="https://firms.modaps.eosdis.nasa.gov/map/#d:today;l:fires_all;@46,32,5z" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">🛰️</span>
+                    <span style="color:var(--accent-orange);font-weight:600">NASA FIRMS</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Satellite fire detection</span>
+                </a>
+                <a href="https://liveuamap.com/en" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">🗺️</span>
+                    <span style="color:var(--accent-red);font-weight:600">LiveUAMap</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Conflict tracking</span>
+                </a>
+                <a href="https://www.marinetraffic.com/en/ais/home/centerx:50/centery:26/zoom:6" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">🚢</span>
+                    <span style="color:var(--accent-blue);font-weight:600">MarineTraffic</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Ship tracking (Persian Gulf)</span>
+                </a>
+                <a href="https://www.windy.com/?32.000,46.000,5" target="_blank" style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--bg-tertiary);border-radius:8px;text-decoration:none;border:1px solid var(--border);transition:all 0.2s">
+                    <span style="font-size:2em;margin-bottom:8px">🌪️</span>
+                    <span style="color:var(--accent-green);font-weight:600">Windy</span>
+                    <span style="color:var(--text-secondary);font-size:0.8em;text-align:center">Weather & wind patterns</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- OSINT Tools -->
+        <div class="panel span-6">
+            <div class="panel-header">
+                <div class="panel-title">🛡️ OSINT Verification Tools</div>
+            </div>
+            <div class="panel-content">
+                <a href="https://firms.modaps.eosdis.nasa.gov/map/" target="_blank" class="resource-link">
+                    <span class="resource-icon">🛰️</span>
+                    <div><div class="resource-name">NASA FIRMS</div><div class="resource-desc">Satellite fire/thermal detection</div></div>
+                </a>
+                <a href="https://www.flightradar24.com" target="_blank" class="resource-link">
+                    <span class="resource-icon">✈️</span>
+                    <div><div class="resource-name">FlightRadar24</div><div class="resource-desc">Live aircraft tracking</div></div>
+                </a>
+                <a href="https://globe.adsbexchange.com" target="_blank" class="resource-link">
+                    <span class="resource-icon">📡</span>
+                    <div><div class="resource-name">ADS-B Exchange</div><div class="resource-desc">Unfiltered flight data (incl. military)</div></div>
+                </a>
+                <a href="https://www.marinetraffic.com" target="_blank" class="resource-link">
+                    <span class="resource-icon">🚢</span>
+                    <div><div class="resource-name">MarineTraffic</div><div class="resource-desc">Ship tracking & AIS</div></div>
+                </a>
+                <a href="https://liveuamap.com" target="_blank" class="resource-link">
+                    <span class="resource-icon">🗺️</span>
+                    <div><div class="resource-name">LiveUAMap</div><div class="resource-desc">Conflict tracking</div></div>
+                </a>
+                <a href="https://tineye.com" target="_blank" class="resource-link">
+                    <span class="resource-icon">🔍</span>
+                    <div><div class="resource-name">TinEye</div><div class="resource-desc">Reverse image search</div></div>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Official Sources -->
+        <div class="panel span-6">
+            <div class="panel-header">
+                <div class="panel-title">📡 Official Sources</div>
+            </div>
+            <div class="panel-content">
+                <a href="https://www.defense.gov/News/" target="_blank" class="resource-link">
+                    <span class="resource-icon">🇺🇸</span>
+                    <div><div class="resource-name">Pentagon</div><div class="resource-desc">US Department of Defense</div></div>
+                </a>
+                <a href="https://www.state.gov/press-releases/" target="_blank" class="resource-link">
+                    <span class="resource-icon">🇺🇸</span>
+                    <div><div class="resource-name">State Department</div><div class="resource-desc">US diplomatic statements</div></div>
+                </a>
+                <a href="https://www.idf.il/en/" target="_blank" class="resource-link">
+                    <span class="resource-icon">🇮🇱</span>
+                    <div><div class="resource-name">IDF Spokesperson</div><div class="resource-desc">Israeli Defense Forces</div></div>
+                </a>
+                <a href="https://en.irna.ir/" target="_blank" class="resource-link">
+                    <span class="resource-icon">🇮🇷</span>
+                    <div><div class="resource-name">IRNA</div><div class="resource-desc">Islamic Republic News Agency</div></div>
+                </a>
+                <a href="https://news.un.org/en/news/region/middle-east" target="_blank" class="resource-link">
+                    <span class="resource-icon">🇺🇳</span>
+                    <div><div class="resource-name">UN News</div><div class="resource-desc">Middle East coverage</div></div>
+                </a>
+                <a href="https://www.nato.int/cps/en/natohq/events.htm" target="_blank" class="resource-link">
+                    <span class="resource-icon">🏳️</span>
+                    <div><div class="resource-name">NATO</div><div class="resource-desc">Alliance updates</div></div>
+                </a>
+            </div>
+        </div>
+    </main>
+    
+    <footer class="footer">
+        🦀 <a href="https://github.com/cloudweaver/clawdwatch">Clawdwatch</a> — 100% Real Data • OpenSky Network • Live RSS Feeds • Auto-refresh: 30s
+    </footer>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // ========== HELPER ==========
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 60) return 'Just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            return `${Math.floor(seconds / 86400)}d ago`;
+        }
+        
+        // ========== FLIGHT RADAR (REAL - OpenSky Network) ==========
+        const flightMap = L.map('flightMap', { zoomControl: true, attributionControl: false }).setView([30, 46], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(flightMap);
+        
+        let flightMarkers = [];
+        
+        // Military callsign patterns
+        const militaryPatterns = [
+            /^RCH/, /^DUKE/, /^EVAC/, /^JAKE/, /^KING/, /^NERO/, /^NAVY/, /^TOPCAT/, /^VIPER/,
+            /^REACH/, /^ATLAS/, /^GIANT/, /^TORQ/, /^IRON/, /^STEEL/, /^COBRA/, /^HAVOC/,
+            /^OTIS/, /^CNV/, /^ORDER/, /^DOOM/, /^BONE/, /^DEATH/, /^RAGE/, /^FURY/,
+            /^GHOST/, /^REAPER/, /^HUNTER/, /^DEMON/, /^BOXER/, /^RIFLE/, /^GUNNY/,
+            /^SNTRY/, /^AWACS/, /^MAGIC/, /^DRAGN/, /^SWORD/, /^LANCE/, /^SABER/,
+            /^RAF/, /^RRR/, /^ASCOT/, /^GAF/, /^FAF/, /^IAM/, /^BAF/,
+            /^IAF/, /^IRGC/, /^IRIS/, /^IRM/, /^RSD/, /^RF/, /^RFF/,
+            /^MMF/, /^UAE/, /^SVA/, /^THY/, /^TCF/, /^FORTE/, /^LAGR/
+        ];
+        
+        function isMilitary(cs) {
+            if (!cs) return false;
+            return militaryPatterns.some(p => p.test(cs.toUpperCase().trim()));
+        }
+        
+        async function fetchFlights() {
+            try {
+                // Middle East bounding box
+                const apiUrl = 'https://opensky-network.org/api/states/all?lamin=12&lamax=42&lomin=25&lomax=65';
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+                
+                const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+                if (!res.ok) throw new Error('API error');
+                
+                const data = await res.json();
+                if (!data.states) return [];
+                
+                return data.states
+                    .filter(s => s[1] && s[5] && s[6])
+                    .map(s => ({
+                        callsign: (s[1] || '').trim(),
+                        origin: s[2] || '??',
+                        lat: s[6],
+                        lon: s[5],
+                        alt: Math.round((s[7] || 0) * 3.281),
+                        speed: Math.round((s[9] || 0) * 1.944),
+                        heading: s[10] || 0,
+                        onGround: s[8]
+                    }))
+                    .filter(f => !f.onGround); // Only airborne
+            } catch (e) {
+                console.error('Flight fetch error:', e);
+                return [];
+            }
+        }
+        
+        async function updateFlights() {
+            document.getElementById('mapStatus').textContent = 'Fetching from OpenSky...';
+            
+            const flights = await fetchFlights();
+            const military = flights.filter(f => isMilitary(f.callsign));
+            
+            document.getElementById('flightCount').textContent = flights.length || '—';
+            document.getElementById('militaryCount').textContent = military.length;
+            document.getElementById('updateTime').innerHTML = `Updated: <strong>${new Date().toLocaleTimeString()}</strong>`;
+            document.getElementById('mapStatus').textContent = flights.length ? `${flights.length} aircraft (OpenSky)` : 'No data';
+            
+            // Clear old markers
+            flightMarkers.forEach(m => flightMap.removeLayer(m));
+            flightMarkers = [];
+            
+            // Add markers
+            flights.forEach(f => {
+                const isMil = isMilitary(f.callsign);
+                const icon = L.divIcon({
+                    html: `<div style="transform:rotate(${f.heading}deg);font-size:${isMil ? '16px' : '12px'}">${isMil ? '🎖️' : '✈️'}</div>`,
+                    iconSize: [16, 16],
+                    className: 'custom-marker'
+                });
+                
+                const marker = L.marker([f.lat, f.lon], { icon })
+                    .bindPopup(`
+                        <div style="font-family:'JetBrains Mono',monospace">
+                            <div style="font-weight:600;color:${isMil ? '#f85149' : '#58a6ff'};font-size:1.1em">${f.callsign}</div>
+                            <div style="margin-top:6px;font-size:0.9em">
+                                <div>🏳️ ${f.origin}</div>
+                                <div>📏 ${f.alt.toLocaleString()} ft</div>
+                                <div>💨 ${f.speed} kts</div>
+                            </div>
+                            ${isMil ? '<div style="color:#f85149;font-weight:600;margin-top:8px">⚠️ MILITARY</div>' : ''}
+                        </div>
+                    `);
+                marker.addTo(flightMap);
+                flightMarkers.push(marker);
+            });
+            
+            // Military list
+            if (military.length > 0) {
+                document.getElementById('militaryList').innerHTML = military.map(f => `
+                    <div class="flight-item military">
+                        <div>
+                            <div class="flight-callsign">🎖️ ${f.callsign}</div>
+                            <div class="flight-info">${f.origin}</div>
+                        </div>
+                        <div class="flight-info">${f.alt.toLocaleString()} ft</div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('militaryList').innerHTML = `
+                    <div class="empty-state">
+                        <p>No military aircraft detected on public ADS-B</p>
+                        <p style="margin-top:8px;font-size:0.85em">Many military flights don't broadcast publicly.<br>
+                        <a href="https://globe.adsbexchange.com" target="_blank" style="color:var(--accent-blue)">Try ADS-B Exchange</a> for unfiltered data.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // ========== NEWS (REAL - RSS FEEDS) ==========
+        async function updateNews() {
+            const feeds = [
+                { name: 'AL JAZEERA', url: 'https://www.aljazeera.com/xml/rss/all.xml', color: '#d4a847' },
+                { name: 'BBC MIDEAST', url: 'https://feeds.bbci.co.uk/news/world/middle_east/rss.xml', color: '#bb1919' },
+                { name: 'REUTERS', url: 'https://www.reutersagency.com/feed/?taxonomy=best-regions&post_type=best', color: '#ff8c00' },
+                { name: 'AP NEWS', url: 'https://rsshub.app/apnews/topics/apf-middleeast', color: '#ff3b30' },
+                { name: 'GUARDIAN', url: 'https://www.theguardian.com/world/middleeast/rss', color: '#052962' },
+                { name: 'CNN', url: 'http://rss.cnn.com/rss/edition_world.rss', color: '#cc0000' },
+                { name: 'TIMES OF ISRAEL', url: 'https://www.timesofisrael.com/feed/', color: '#1e5799' },
+                { name: 'IRAN INTL', url: 'https://www.iranintl.com/en/feed', color: '#00a651' },
+            ];
+            
+            let allNews = [];
+            
+            for (const feed of feeds) {
+                try {
+                    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`, {
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    const data = await res.json();
+                    if (data.items) {
+                        data.items.slice(0, 4).forEach(item => {
+                            allNews.push({
+                                source: feed.name,
+                                color: feed.color,
+                                title: item.title,
+                                link: item.link,
+                                date: new Date(item.pubDate)
+                            });
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`RSS error ${feed.name}:`, e);
+                }
+            }
+            
+            allNews.sort((a, b) => b.date - a.date);
+            allNews = allNews.slice(0, 20);
+            
+            document.getElementById('newsCount').textContent = allNews.length || '—';
+            
+            if (allNews.length) {
+                document.getElementById('newsList').innerHTML = allNews.map(n => `
+                    <div class="news-item">
+                        <div class="news-source" style="color:${n.color}">${n.source}</div>
+                        <div class="news-title"><a href="${n.link}" target="_blank">${n.title}</a></div>
+                        <div class="news-time">${getTimeAgo(n.date)}</div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('newsList').innerHTML = '<div class="empty-state">Unable to load RSS feeds</div>';
+            }
+        }
+        
+        // ========== OFFICIAL STATEMENTS (REAL - RSS FEEDS) ==========
+        async function updateStatements() {
+            const feeds = [
+                { name: 'PENTAGON', flag: '🇺🇸', url: 'https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?max=10&ContentType=1&Site=945', color: '#3b5998' },
+                { name: 'STATE DEPT', flag: '🇺🇸', url: 'https://www.state.gov/rss-feed/press-releases/feed/', color: '#002868' },
+                { name: 'UN NEWS', flag: '🇺🇳', url: 'https://news.un.org/feed/subscribe/en/news/region/middle-east/feed/rss.xml', color: '#5b92e5' },
+                { name: 'NATO', flag: '🏳️', url: 'https://www.nato.int/cps/en/natohq/news.xml', color: '#004990' },
+                { name: 'UK GOV', flag: '🇬🇧', url: 'https://www.gov.uk/government/organisations/foreign-commonwealth-development-office.atom', color: '#cf142b' },
+            ];
+            
+            let statements = [];
+            
+            for (const feed of feeds) {
+                try {
+                    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`, {
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    const data = await res.json();
+                    if (data.items) {
+                        data.items.slice(0, 3).forEach(item => {
+                            statements.push({
+                                org: feed.name,
+                                flag: feed.flag,
+                                color: feed.color,
+                                text: item.title,
+                                link: item.link,
+                                date: new Date(item.pubDate)
+                            });
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Statement RSS error ${feed.name}:`, e);
+                }
+            }
+            
+            statements.sort((a, b) => b.date - a.date);
+            statements = statements.slice(0, 15);
+            
+            document.getElementById('statementsCount').textContent = statements.length || '—';
+            
+            if (statements.length) {
+                document.getElementById('statementList').innerHTML = statements.map(s => `
+                    <div class="news-item">
+                        <div class="news-source" style="color:${s.color}">${s.flag} ${s.org}</div>
+                        <div class="news-title"><a href="${s.link}" target="_blank">${s.text}</a></div>
+                        <div class="news-time">${getTimeAgo(s.date)}</div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('statementList').innerHTML = '<div class="empty-state">Unable to load official feeds</div>';
+            }
+        }
+        
+        // ========== INIT ==========
+        updateFlights();
+        updateNews();
+        updateStatements();
+        
+        // Auto-refresh
+        setInterval(updateFlights, 30000);
+        setInterval(updateNews, 60000);
+        setInterval(updateStatements, 120000);
+    </script>
+</body>
+</html>
