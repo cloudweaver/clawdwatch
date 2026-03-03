@@ -6,15 +6,30 @@ import * as cheerio from 'cheerio';
 const app = express();
 const PORT = 3444;
 
+// Simple cache for API responses
+const cache: { [key: string]: { data: any; timestamp: number } } = {};
+const CACHE_TTL = 60 * 1000; // 1 minute cache
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchJson = (url: string): Promise<any> => {
+const fetchJson = (url: string, useCache = true): Promise<any> => {
+  const cacheKey = url;
+  
+  if (useCache && cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL) {
+    return Promise.resolve(cache[cacheKey].data);
+  }
+  
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       let data = '';
       res.on('data', (chunk: string) => data += chunk);
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          const json = JSON.parse(data);
+          // Only cache if not an error
+          if (!json.error && data.length < 1000000) {
+            cache[cacheKey] = { data: json, timestamp: Date.now() };
+          }
+          resolve(json);
         } catch (e: any) {
           resolve({ error: 'Failed to parse JSON', details: e.message });
         }
@@ -117,10 +132,12 @@ async function fetchAP(): Promise<NewsItem[]> {
   }
 }
 
-// Region definitions
+// Region definitions - Using upstream cloudweaver bounds
 const REGIONS: { [key: string]: { name: string; lat: number[]; lon: number[] } } = {
-  middle_east: { name: 'Middle East', lat: [23, 40], lon: [44, 60] },
-  europe: { name: 'Europe', lat: [35, 60], lon: [-10, 40] },
+  middle_east: { name: 'Middle East', lat: [12, 42], lon: [25, 65] },
+  europe: { name: 'Europe', lat: [35, 72], lon: [-10, 40] },
+  usa: { name: 'USA', lat: [24, 50], lon: [-125, -66] },
+  asia: { name: 'Asia', lat: [5, 55], lon: [70, 145] },
   eastern_europe: { name: 'Eastern Europe', lat: [44, 70], lon: [15, 60] },
   central_asia: { name: 'Central Asia', lat: [30, 55], lon: [50, 90] },
   south_asia: { name: 'South Asia', lat: [5, 40], lon: [60, 100] },
@@ -129,7 +146,8 @@ const REGIONS: { [key: string]: { name: string; lat: number[]; lon: number[] } }
   north_america: { name: 'North America', lat: [15, 75], lon: [-170, -50] },
   south_america: { name: 'South America', lat: [-60, 15], lon: [-85, -30] },
   oceania: { name: 'Oceania', lat: [-50, 0], lon: [110, 180] },
-  iran: { name: 'Iran', lat: [25, 40], lon: [44, 64] },
+  // Conflict regions - Using upstream bounds
+  iran: { name: 'Iran', lat: [12, 42], lon: [25, 65] },
   israel: { name: 'Israel/Palestine', lat: [29, 34], lon: [34, 36] },
   lebanon: { name: 'Lebanon', lat: [33, 35], lon: [35, 37] },
   syria: { name: 'Syria', lat: [32, 42], lon: [35, 43] },
@@ -161,7 +179,10 @@ async function getFlightsForRegion(region: string) {
   const url = `https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`;
   
   try {
-    const data = await fetchJson(url);
+    const data = await fetchJson(url, true);
+    if (data.error || data.message === 'Too many requests') {
+      return { error: data.message || 'Rate limited', total: 0, flights: [] };
+    }
     return {
       region: config.name,
       regionId: region,
@@ -169,7 +190,7 @@ async function getFlightsForRegion(region: string) {
       flights: data.states?.slice(0, 50) || []
     };
   } catch (e: any) {
-    return { error: e.message };
+    return { error: e.message, total: 0, flights: [] };
   }
 }
 
@@ -180,6 +201,7 @@ app.get('/status', (req, res) => {
     port: PORT, 
     version: '1.0.0-lobster',
     regions: Object.keys(REGIONS).length,
+    cacheActive: true,
     timestamp: new Date().toISOString()
   });
 });
@@ -229,7 +251,7 @@ app.get('/flights/:region', async (req, res) => {
   });
 });
 
-// NEWS ENDPOINT - Uses original Clawdwatch sources
+// NEWS ENDPOINT
 app.get('/news', async (req, res) => {
   const [reuters, aljazeera, ap] = await Promise.all([
     fetchReuters(),
@@ -247,13 +269,11 @@ app.get('/news', async (req, res) => {
   });
 });
 
-// OSINT endpoint - combines flights + news
+// OSINT endpoint
 app.get('/osint', async (req, res) => {
-  // Get flight data
   const conflictRegions = ['iran', 'israel', 'lebanon', 'syria', 'iraq', 'yemen', 'saudi_arabia', 'uae', 'qatar', 'kuwait', 'turkey'];
   const flightResults = await Promise.all(conflictRegions.map(r => getFlightsForRegion(r)));
   
-  // Get news
   const [reuters, aljazeera, ap] = await Promise.all([
     fetchReuters(),
     fetchAlJazeera(),
@@ -283,14 +303,12 @@ app.get('/osint', async (req, res) => {
   });
 });
 
-// CONFLICT endpoint - focused on Middle East conflict
+// CONFLICT endpoint
 app.get('/conflict', async (req, res) => {
   const conflictRegions = ['iran', 'israel', 'lebanon', 'syria', 'iraq', 'yemen', 'saudi_arabia', 'uae', 'qatar', 'kuwait', 'turkey'];
   
-  // Get flight data for all conflict zones
   const flightResults = await Promise.all(conflictRegions.map(r => getFlightsForRegion(r)));
   
-  // Get news
   const [reuters, aljazeera, ap] = await Promise.all([
     fetchReuters(),
     fetchAlJazeera(),
@@ -343,5 +361,5 @@ app.get('/snapshot', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log('Clawdwatch HTTP API running on port ' + PORT + ' with news + flights');
+  console.log('Clawdwatch HTTP API running on port ' + PORT + ' with caching enabled');
 });
