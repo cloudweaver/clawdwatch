@@ -56,7 +56,6 @@
 | 🌐 **HTTP API** | ✅ LIVE | Port 3444 |
 | 🤖 **LM Studio MCP** | ✅ READY | Connect via HTTP |
 | 📡 **OpenClaw** | ✅ INTEGRATED | Native skill available |
-| 📧 **Email (AgentMail)** | ✅ READY | duckbot@agentmail.to |
 
 ---
 
@@ -96,8 +95,6 @@ npm run regions  # List regions
 | `GET /osint` | Combined OSINT (flights + news) |
 | `GET /conflict` | Conflict zone data (11 regions) |
 | `GET /snapshot` | Quick OSINT summary |
-| `GET /email/inboxes` | List email inboxes |
-| `GET /email/inbox/:address` | Get emails for inbox |
 
 ### Example Usage
 ```bash
@@ -112,9 +109,6 @@ curl http://localhost:3444/news
 
 # Get flights (rate limited - 30s interval)
 curl http://localhost:3444/flights
-
-# List email inboxes
-curl http://localhost:3444/email/inboxes
 ```
 
 ---

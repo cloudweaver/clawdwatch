@@ -404,31 +404,6 @@ app.get('/snapshot', async (req, res) => {
   });
 });
 
-// AgentMail configuration
-const { AgentMailClient } = require('agentmail');
-const AGENTMAIL_API_KEY = process.env.AGENTMAIL_API_KEY || '';
-const agentMailClient = new AgentMailClient({ apiKey: AGENTMAIL_API_KEY });
-
-// AgentMail endpoints
-app.get('/email/inboxes', async (req, res) => {
-  try {
-    const inboxes = await agentMailClient.inboxes.list();
-    res.json({ success: true, inboxes });
-  } catch (e: any) {
-    res.json({ error: e.message });
-  }
-});
-
-app.get('/email/inbox/:address', async (req, res) => {
-  try {
-    const address = req.params.address;
-    const messages = await agentMailClient.messages.list({ inboxAddress: address });
-    res.json({ success: true, address, messages });
-  } catch (e: any) {
-    res.json({ error: e.message });
-  }
-});
-
 app.listen(PORT, () => {
   console.log('Clawdwatch HTTP API running on port ' + PORT + ' with caching enabled');
 });
