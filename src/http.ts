@@ -6,37 +6,81 @@ import * as cheerio from 'cheerio';
 const app = express();
 const PORT = 3444;
 
+// OpenSky API configuration
+const OPENSKY_API_KEY = process.env.OPENSKY_API_KEY || ''; // Get free key at https://opensky-network.org/api/#registration
+const OPENSKY_AUTH_HEADER = OPENSKY_API_KEY ? { 'Authorization': OPENSKY_API_KEY } : {};
+
+// Rate limiting state
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 10000; // 10 seconds between requests (OpenSky free tier limit)
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 30000; // 30 seconds wait on rate limit
+
 // Simple cache for API responses
 const cache: { [key: string]: { data: any; timestamp: number } } = {};
-const CACHE_TTL = 60 * 1000; // 1 minute cache
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const fetchJson = (url: string, useCache = true): Promise<any> => {
+const fetchWithRateLimit = async (url: string, useCache = true): Promise<any> => {
   const cacheKey = url;
   
+  // Check cache first
   if (useCache && cache[cacheKey] && Date.now() - cache[cacheKey].timestamp < CACHE_TTL) {
-    return Promise.resolve(cache[cacheKey].data);
+    return cache[cacheKey].data;
   }
   
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk: string) => data += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          // Only cache if not an error
-          if (!json.error && data.length < 1000000) {
-            cache[cacheKey] = { data: json, timestamp: Date.now() };
-          }
-          resolve(json);
-        } catch (e: any) {
-          resolve({ error: 'Failed to parse JSON', details: e.message });
-        }
+  // Rate limiting - wait between requests
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+    console.log(`Rate limiting: waiting ${waitTime}ms before request`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+  
+  // Make request with retry logic
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          ...OPENSKY_AUTH_HEADER,
+          'User-Agent': 'Clawdwatch-Lobster-Edition/1.0'
+        },
+        timeout: 15000
       });
-    }).on('error', reject);
-  });
+      
+      // Check for rate limit response
+      if (response.status === 429 || response.data?.message === 'Too many requests') {
+        console.log(`Rate limited by OpenSky, attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${RETRY_DELAY}ms`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        lastRequestTime = Date.now(); // Reset after rate limit
+        continue;
+      }
+      
+      // Cache successful response
+      if (response.data && Object.keys(response.data).length > 0) {
+        cache[cacheKey] = { data: response.data, timestamp: Date.now() };
+      }
+      return response.data;
+      
+    } catch (error: any) {
+      if (error.response?.status === 429 || error.message.includes('429')) {
+        console.log(`Rate limited (error), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${RETRY_DELAY}ms`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        lastRequestTime = Date.now();
+        continue;
+      }
+      throw error;
+    }
+  }
+  
+  return { error: 'Max retries exceeded', message: 'OpenSky rate limit - try again later or add API key' };
 };
+
+// Legacy function for compatibility
+const fetchJson = fetchWithRateLimit;
 
 // News types
 interface NewsItem {
