@@ -5,8 +5,12 @@
   "main": "src/index.ts",
   "scripts": {
     "watch": "ts-node src/index.ts",
+    "snapshot": "ts-node src/cli.ts snapshot",
+    "regions": "ts-node src/cli.ts regions",
     "build": "tsc",
-    "dev": "nodemon --exec ts-node src/index.ts"
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "start": "ts-node src/http.ts",
+    "http": "ts-node src/http.ts"
   },
   "keywords": [
     "osint",
@@ -22,9 +26,11 @@
   "dependencies": {
     "axios": "^1.13.6",
     "cheerio": "^1.2.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.10.0",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",

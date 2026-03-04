@@ -1,0 +1,14 @@
+{
+  "name": "mcp-clawdwatch",
+  "version": "1.0.0",
+  "description": "Clawdwatch MCP server - connects to Clawdwatch HTTP API",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}
