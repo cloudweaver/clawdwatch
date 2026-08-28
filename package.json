@@ -1,12 +1,17 @@
 {
   "name": "clawdwatch",
-  "version": "0.1.0",
+  "version": "2.5.0-lobster",
   "description": "🦀 The all-seeing OSINT agent — real-time conflict intelligence powered by Clawdbot",
   "main": "src/index.ts",
   "scripts": {
     "watch": "ts-node src/index.ts",
+    "snapshot": "ts-node src/cli.ts snapshot",
+    "regions": "ts-node src/cli.ts regions",
     "build": "tsc",
-    "dev": "nodemon --exec ts-node src/index.ts"
+    "test:e2e": "node scripts/test-endpoints.js",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "start": "ts-node src/http.ts",
+    "http": "ts-node src/http.ts"
   },
   "keywords": [
     "osint",
@@ -20,11 +25,13 @@
   "author": "cloudweaver",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.13.6",
+    "axios": "^1.19.0",
     "cheerio": "^1.2.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.10.0",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",

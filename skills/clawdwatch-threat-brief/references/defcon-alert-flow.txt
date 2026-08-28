@@ -1,0 +1,116 @@
+============================================================
+DEFCON ALERT HANDLER — STATE MACHINE & FLOW
+Source: src/alerts/defcon.ts (ClawdWatch Lobster Edition)
+============================================================
+
+THREAT SCORE MAP
+────────────────
+DEFCON 1  ->  100  (max threat / nuclear war imminent)
+DEFCON 2  ->   75  (direct military threat / armed forces mobilized)
+DEFCON 3  ->   50  (terrorist attack possible / AF ready 15 min)
+DEFCON 4  ->   25  (above normal readiness / heightened vigilance)
+DEFCON 5  ->    0  (normal peacetime / no imminent threat)
+
+
+LEVEL METADATA
+──────────────
+Level 5 — GREEN  🟢
+  Label:     DEFCON 5 — NORMAL
+  Channels:  none (no alerts fired at this level)
+  Auto-escalate: false
+  Required actions:
+    • Continue standard log monitoring
+    • Maintain routine patch management
+    • Review and update security documentation
+
+Level 4 — BLUE  🔵
+  Label:     DEFCON 4 — ELEVATED
+  Channels:  Telegram only
+  Auto-escalate: false
+  Required actions:
+    • Increase log review frequency to every 2 hours
+    • Verify all monitoring systems are fully operational
+    • Review recent access logs for anomalies
+    • Notify Tier-2 SOC analysts of heightened awareness
+
+Level 3 — YELLOW  🟡
+  Label:     DEFCON 3 — ARMED FORCES READY
+  Channels:  Telegram + Slack
+  Auto-escalate: true
+  Required actions:
+    • Activate enhanced monitoring across all critical systems
+    • Notify Tier-3 analysts and incident response team
+    • Review and harden critical system access controls
+    • Prepare incident response playbooks for activation
+
+Level 2 — ORANGE  🟠
+  Label:     DEFCON 2 — ARMED FORCES MOBILIZE
+  Channels:  Telegram + Slack
+  Auto-escalate: true
+  Required actions:
+    • Activate full incident response team
+    • Implement emergency access controls and MFA enforcement
+    • Isolate non-critical systems from critical network segments
+    • Initiate active threat hunting procedures
+
+Level 1 — RED  🔴
+  Label:     DEFCON 1 — MAXIMUM FORCE READY
+  Channels:  Telegram + Slack
+  Auto-escalate: true
+  Required actions:
+    • EXECUTE INCIDENT RESPONSE PLAN IMMEDIATELY
+    • Activate executive notification and crisis communication
+    • Initiate forensic preservation of affected systems
+    • Coordinate with law enforcement and CISA if breach confirmed
+
+
+STATE MACHINE
+──────────────
+States: IDLE | TRACKING | ALERT_FIRED
+
+Transitions:
+  IDLE -> TRACKING         on first check() call
+  TRACKING -> ALERT_FIRED  on level change OR escalation timeout passed
+  ALERT_FIRED -> TRACKING  on next check() call (cooldown active)
+
+Alert fires when:
+  1. Level changed since last check  (changeType: escalation | de_escalation)
+  2. Same level held past escalationTimeoutMs  (changeType: escalation)
+  3. First run  (changeType: init)
+
+Alert suppressed when:
+  • Level unchanged AND escalation timeout not yet passed AND cooldown not expired
+
+COOLDOWN & ESCALATION
+──────────────────────
+cooldownMs:           default 30 min  (env: DEFCON_COOLDOWN_MS)
+escalationTimeoutMs:  default 15 min  (env: DEFCON_ESCALATION_TIMEOUT_MS)
+pollIntervalMs:       default  5 min  (env: DEFCON_POLL_INTERVAL_MS)
+
+Levels 1-3: autoEscalate = true  -> escalation timer runs
+Levels 4-5: autoEscalate = false -> no escalation timer
+
+
+CHANNEL DISPATCH RULES
+──────────────────────
+Telegram: fires when level <= DEFCON_TELEGRAM_MIN_LEVEL (default: 4)
+Slack:    fires when level <= DEFCON_SLACK_MIN_LEVEL    (default: 3)
+
+Env vars:
+  TELEGRAM_BOT_TOKEN=***  TELEGRAM_CHAT_ID=...
+  SLACK_DEFCON_WEBHOOK_URL=...  (optional)
+
+
+PUBLIC API
+──────────
+class DefconAlertHandler
+  constructor(config: DefconalerterConfig)
+  check(): Promise<DefconAlert | null>     <- one-shot, no loop
+  start(): void                            <- begins polling loop
+  stop(): void                             <- stops polling loop
+  getLevel(): Promise<DefconLevel | null>  <- read level only, no alert
+  onAlert(cb: (alert: DefconAlert) => void) <- register callback
+
+function createDefconHandler(
+  env: Record<string, string | undefined>
+): DefconAlertHandler   <- env-var factory

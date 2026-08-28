@@ -1,0 +1,96 @@
+============================================================
+THREAT SCORE REFERENCE — DEFCON 1-5
+Source: src/sources/intel.ts (ClawdWatch Lobster Edition)
+============================================================
+
+DefconStatus INTERFACE
+──────────────────────
+interface DefconStatus {
+  level:        1 | 2 | 3 | 4 | 5;
+  description:  string;
+  threatScore:  number;        // 0-100 (DEFCON 1=100, DEFCON 5=0)
+  source:       string;         // 'defconlevel.com'
+  url:          string;          // 'https://www.defconlevel.com/current-level'
+  fetchedAt:    string;         // ISO 8601
+}
+
+
+fetchDefconLevel()
+──────────────────
+export async function fetchDefconLevel(): Promise<DefconStatus | null>
+
+  Fetches:     https://www.defconlevel.com/current-level
+  User-Agent:  ClawdWatch-Lobster/1.0
+  Timeout:     15s
+  Cache TTL:   15 min (cached in intel.ts module cache)
+  Returns:     DefconStatus | null
+
+  HTML parsing:
+    Primary:   /<h1[^>]*>Current DEFCON Level[^<]*<\/h1>[\s\S]{0,3000}?<strong>\s*DEFCON\s*([1-5])/i
+    Fallback:  /DEFCON\s*([1-5])/   (first occurrence in body)
+
+
+defconScore()
+─────────────
+export function defconScore(level: 1|2|3|4|5): number
+
+  DEFCON 1  ->  100
+  DEFCON 2  ->   75
+  DEFCON 3  ->   50
+  DEFCON 4  ->   25
+  DEFCON 5  ->    0
+
+
+NAMED CONSTANTS (exported)
+──────────────────────────
+export const DEFCON_SCORE_1 = 100;
+export const DEFCON_SCORE_2 =  75;
+export const DEFCON_SCORE_3 =  50;
+export const DEFCON_SCORE_4 =  25;
+export const DEFCON_SCORE_5 =   0;
+
+
+DEFCON DESCRIPTIONS (all 5 levels)
+───────────────────────────────────
+5: 'DEFCON 5 — Normal peacetime readiness. Standard monitoring posture. No imminent threat.'
+4: 'DEFCON 4 — Above normal readiness. Possible terrorist activity or regional conflict. Heightened vigilance.'
+3: 'DEFCON 3 — Armed Forces ready to mobilize in 15 minutes. Terrorist attack possible. Air defense alert.'
+2: 'DEFCON 2 — Armed forces mobilized. Direct military threat. Terrorist attack likely. Critical infrastructure at severe risk.'
+1: 'DEFCON 1 — Maximum readiness. Nuclear war imminent or in progress. ALL systems critical.'
+
+
+HTTP ENDPOINTS (src/http.ts)
+────────────────────────────
+GET /defcon
+  Returns: DefconStatus + threatLevel label + full thresholds table
+  Example:
+    {
+      "level": 3,
+      "description": "DEFCON 3 — ...",
+      "threatScore": 50,
+      "threatLevel": "ELEVATED",
+      "thresholds": {
+        "1": { "score": 100, "label": "CRITICAL",   "description": "Maximum readiness..." },
+        "2": { "score":  75, "label": "HIGH",      "description": "Armed forces mobilized..." },
+        "3": { "score":  50, "label": "ELEVATED",   "description": "Terrorist attack possible..." },
+        "4": { "score":  25, "label": "GUARDED",   "description": "Above normal readiness..." },
+        "5": { "score":   0, "label": "LOW",        "description": "Normal peacetime..." }
+      },
+      "source": "defconlevel.com",
+      "url": "https://www.defconlevel.com/current-level",
+      "fetchedAt": "2026-06-29T..."
+    }
+
+GET /defcon/score
+  Returns: lightweight level + score only
+  Example:
+    {
+      "level": 3,
+      "score": 50,
+      "levelLabel": "ELEVATED",
+      "timestamp": "2026-06-29T...",
+      "source": "defconlevel.com"
+    }
+
+Note: These endpoints require the HTTP server running (npm run http, port 3444).
+If the server is offline, fall back to web_extract on defconlevel.com directly.
